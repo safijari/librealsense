@@ -1,5 +1,7 @@
 package com.intel.realsense.capture;
 
+import static org.opencv.core.CvType.CV_8UC1;
+
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -14,18 +16,50 @@ import android.widget.TextView;
 
 import com.intel.realsense.librealsense.Colorizer;
 import com.intel.realsense.librealsense.Config;
+import com.intel.realsense.librealsense.DepthFrame;
+import com.intel.realsense.librealsense.DepthSensor;
 import com.intel.realsense.librealsense.DeviceList;
 import com.intel.realsense.librealsense.DeviceListener;
+import com.intel.realsense.librealsense.Extension;
+import com.intel.realsense.librealsense.Frame;
+import com.intel.realsense.librealsense.FrameCallback;
 import com.intel.realsense.librealsense.FrameSet;
 import com.intel.realsense.librealsense.GLRsSurfaceView;
+import com.intel.realsense.librealsense.Option;
 import com.intel.realsense.librealsense.Pipeline;
 import com.intel.realsense.librealsense.PipelineProfile;
 import com.intel.realsense.librealsense.RsContext;
+import com.intel.realsense.librealsense.StreamFormat;
 import com.intel.realsense.librealsense.StreamType;
+import com.intel.realsense.librealsense.VideoFrame;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import android.graphics.Bitmap;
+import android.graphics.Bitmap.CompressFormat;
+import android.os.Environment;
+
+import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.imgcodecs.Imgcodecs;
 
 public class MainActivity extends AppCompatActivity {
+    static {
+        if (!OpenCVLoader.initDebug())
+            Log.d("ERROR", "Unable to load OpenCV");
+        else
+            Log.d("SUCCESS", "OpenCV loaded");
+    }
+
     private static final String TAG = "librs capture example";
     private static final int PERMISSIONS_REQUEST_CAMERA = 0;
+    private static final int PERMISSIONS_REQUEST_FILES = 1;
 
     private boolean mPermissionsGranted = false;
 
@@ -38,6 +72,10 @@ public class MainActivity extends AppCompatActivity {
     private Pipeline mPipeline;
     private Colorizer mColorizer;
     private RsContext mRsContext;
+
+    private File mCaptureFolder = null;
+
+    private Imgcodecs imageCodes = new Imgcodecs();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,8 +94,10 @@ public class MainActivity extends AppCompatActivity {
 
         // Android 9 also requires camera permissions
         if (android.os.Build.VERSION.SDK_INT > android.os.Build.VERSION_CODES.O &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, PERMISSIONS_REQUEST_CAMERA);
+                (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) ||
+                (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED))  {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, PERMISSIONS_REQUEST_CAMERA);
+
             return;
         }
 
@@ -111,6 +151,7 @@ public class MainActivity extends AppCompatActivity {
         mColorizer = new Colorizer();
 
         try(DeviceList dl = mRsContext.queryDevices()){
+
             if(dl.getDeviceCount() > 0) {
                 showConnectLabel(false);
                 start();
@@ -140,6 +181,49 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    private void saveFramesAsPNG(FrameSet frames) {
+        final List<Frame> Irframes = new ArrayList<>();
+        if (mCaptureFolder == null) {
+            File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            mCaptureFolder = new File(downloads + "/realsense_captures/" + System.currentTimeMillis());
+            if (!mCaptureFolder.exists()) {
+                mCaptureFolder.mkdirs();
+            }
+        }
+
+        frames.foreach(new FrameCallback() {
+            @Override
+            public void onFrame(Frame f) {
+                Irframes.add(f);
+            }
+        });
+
+        if (Irframes.size() == 2)
+        {
+            VideoFrame frameL = Irframes.get(0).as(Extension.VIDEO_FRAME);
+            VideoFrame frameR = Irframes.get(0).as(Extension.VIDEO_FRAME);
+            Mat mrgbL  = new Mat(frameL.getHeight(), frameR.getWidth(), CV_8UC1);
+            Mat mrgbR  = new Mat(frameR.getHeight(), frameR.getWidth(), CV_8UC1);
+
+            byte[] dataL = new byte[frameL.getDataSize()];
+            frameL.getData(dataL);
+            mrgbL.put(0, 0, dataL);
+
+            byte[] dataR = new byte[frameR.getDataSize()];
+            frameL.getData(dataR);
+            mrgbR.put(0, 0, dataR);
+
+            Mat out = new Mat(frameL.getHeight(), frameL.getWidth()*2, CV_8UC1);
+            List<Mat> matlist = new ArrayList<>();
+            matlist.add(mrgbL);
+            matlist.add(mrgbR);
+
+            Core.hconcat(matlist, out);
+            File file = new File(mCaptureFolder, "frame_" + System.currentTimeMillis() + ".png");
+            imageCodes.imwrite(file.toString(), out);
+        }
+    }
+
     Runnable mStreaming = new Runnable() {
         @Override
         public void run() {
@@ -148,6 +232,7 @@ public class MainActivity extends AppCompatActivity {
                     try(FrameSet processed = frames.applyFilter(mColorizer)) {
                         mGLSurfaceView.upload(processed);
                     }
+                    saveFramesAsPNG(frames);
                 }
                 mHandler.post(mStreaming);
             }
@@ -157,13 +242,16 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+
     private void configAndStart() throws Exception {
         try(Config config  = new Config())
         {
-            config.enableStream(StreamType.DEPTH, 640, 480);
-            config.enableStream(StreamType.COLOR, 640, 480);
+            config.enableStream(StreamType.INFRARED, 1, 640, 480, StreamFormat.Y8, 30);
+            config.enableStream(StreamType.INFRARED, 2, 640, 480, StreamFormat.Y8, 30);
             // try statement needed here to release resources allocated by the Pipeline:start() method
-            try(PipelineProfile pp = mPipeline.start(config)){}
+            try(PipelineProfile pp = mPipeline.start(config)){
+                pp.getDevice().querySensors().get(0).setValue(Option.EMITTER_ENABLED, 0f);
+            }
         }
     }
 
@@ -183,6 +271,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private synchronized void stop() {
+        mCaptureFolder = null;
         if(!mIsStreaming)
             return;
         try {

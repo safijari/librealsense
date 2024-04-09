@@ -17,6 +17,7 @@ import android.widget.TextView;
 import com.intel.realsense.librealsense.Config;
 import com.intel.realsense.librealsense.DeviceList;
 import com.intel.realsense.librealsense.DeviceListener;
+import com.intel.realsense.librealsense.Frame;
 import com.intel.realsense.librealsense.FrameSet;
 import com.intel.realsense.librealsense.GLRsSurfaceView;
 import com.intel.realsense.librealsense.Pipeline;
@@ -190,12 +191,13 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+
+
     Runnable mStreaming = new Runnable() {
         @Override
         public void run() {
             try {
                 try(FrameSet frames = mPipeline.waitForFrames()) {
-                    mGLSurfaceView.upload(frames);
                 }
                 mHandler.post(mStreaming);
             }

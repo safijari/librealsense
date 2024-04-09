@@ -21,4 +21,3 @@ The build will take few minutes since the library is built for 4 different ABI c
 If the build succeeded, the generated AAR will be located in `<librealsense_root_dir>/wrappers/android/librealsense/build/outputs/aar`
 
 You can also build and run any of the example apps from this project by selecting it from the 'Configuration box' and run it while your target phone is connected:
-![run_example](https://user-images.githubusercontent.com/18511514/52564272-69bd2700-2e0c-11e9-94dc-8f79c60a6b42.PNG)

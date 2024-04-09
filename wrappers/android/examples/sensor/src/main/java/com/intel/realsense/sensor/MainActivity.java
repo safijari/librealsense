@@ -210,7 +210,7 @@ public class MainActivity extends AppCompatActivity {
 
             configAndStart();
 
-            Log.d(TAG, "streaming started successfully");
+            Log.d(TAG, "strmeeaming started successfully");
         } catch (Exception e) {
             Log.e(TAG, "failed to start streaming");
         }
@@ -245,7 +245,7 @@ public class MainActivity extends AppCompatActivity {
             mRsContext = null;
         }
     }
-
+me
     private void assignDepthSensor() {
         List<Sensor> sensors = mDevice.querySensors();
 
