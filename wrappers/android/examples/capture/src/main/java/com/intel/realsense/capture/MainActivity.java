@@ -201,7 +201,7 @@ public class MainActivity extends AppCompatActivity {
         if (Irframes.size() == 2)
         {
             VideoFrame frameL = Irframes.get(0).as(Extension.VIDEO_FRAME);
-            VideoFrame frameR = Irframes.get(0).as(Extension.VIDEO_FRAME);
+            VideoFrame frameR = Irframes.get(1).as(Extension.VIDEO_FRAME);
             Mat mrgbL  = new Mat(frameL.getHeight(), frameR.getWidth(), CV_8UC1);
             Mat mrgbR  = new Mat(frameR.getHeight(), frameR.getWidth(), CV_8UC1);
 
