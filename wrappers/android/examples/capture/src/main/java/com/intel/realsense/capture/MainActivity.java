@@ -37,6 +37,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import android.graphics.Bitmap;
@@ -77,10 +78,16 @@ public class MainActivity extends AppCompatActivity {
 
     private Imgcodecs imageCodes = new Imgcodecs();
 
+    private int mNumSaved = 0;
+    private int mNumFailed = 0;
+    private TextView overlay;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        overlay = findViewById(R.id.numFramesText);
 
         mAppContext = getApplicationContext();
         mBackGroundText = findViewById(R.id.connectCameraText);
@@ -210,17 +217,25 @@ public class MainActivity extends AppCompatActivity {
             mrgbL.put(0, 0, dataL);
 
             byte[] dataR = new byte[frameR.getDataSize()];
-            frameL.getData(dataR);
+            frameR.getData(dataR);
             mrgbR.put(0, 0, dataR);
 
             Mat out = new Mat(frameL.getHeight(), frameL.getWidth()*2, CV_8UC1);
-            List<Mat> matlist = new ArrayList<>();
-            matlist.add(mrgbL);
-            matlist.add(mrgbR);
+            // List<Mat> matlist = new ArrayList<>();
+            // matlist.add(mrgbL);
+            // matlist.add(mrgbR);
 
-            Core.hconcat(matlist, out);
+            Core.hconcat(Arrays.asList(mrgbL, mrgbR), out);
+
+            //Core.hconcat(matlist, out);
             File file = new File(mCaptureFolder, "frame_" + System.currentTimeMillis() + ".png");
-            imageCodes.imwrite(file.toString(), out);
+            Boolean res = imageCodes.imwrite(file.toString(), out);
+            if (res) {
+                mNumSaved += 1;
+            } else {
+                mNumFailed += 1;
+            }
+            overlay.setText(String.format("Saved: %d   Failed: %d", mNumSaved, mNumFailed));
         }
     }
 
